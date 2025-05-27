@@ -52,6 +52,7 @@ const AdminAnalytics = () => {
           <select 
             className="form-input py-1.5 text-sm"
             defaultValue="7"
+            aria-label="Select time range"
           >
             <option value="7">Last 7 days</option>
             <option value="30">Last 30 days</option>
