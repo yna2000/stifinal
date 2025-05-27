@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { mockApi } from '../services/api';
-import { Plus, Calendar, Users, TrendingUp, Bell } from 'lucide-react';
+import { Plus, Calendar, Users, TrendingUp, Bell, ChevronRight, MapPin, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import StatCard from '../components/admin/StatCard';
 import EventForm from '../components/admin/EventForm';
+import AttendeesList from '../components/admin/AttendeesList';
 import toast from 'react-hot-toast';
 
 const AdminDashboard = () => {
@@ -14,6 +15,9 @@ const AdminDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isStatsLoading, setIsStatsLoading] = useState(true);
   const [showEventForm, setShowEventForm] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
+  const [attendees, setAttendees] = useState<any[]>([]);
+  const [isLoadingAttendees, setIsLoadingAttendees] = useState(false);
   
   const { user } = useAuth();
   const { addNotification } = useNotifications();
@@ -52,7 +56,7 @@ const AdminDashboard = () => {
       }, 1000);
     }
   }, [addNotification, user]);
-  
+
   const handleCreateEvent = async (eventData: any) => {
     try {
       const { success, event } = await mockApi.createEvent(eventData);
@@ -77,6 +81,21 @@ const AdminDashboard = () => {
       throw error;
     }
   };
+
+  const handleViewAttendees = async (eventId: string) => {
+    setSelectedEvent(eventId);
+    setIsLoadingAttendees(true);
+    
+    try {
+      const { attendees } = await mockApi.getEventAttendees(eventId);
+      setAttendees(attendees);
+    } catch (error) {
+      console.error('Failed to fetch attendees:', error);
+      toast.error('Failed to load attendees');
+    } finally {
+      setIsLoadingAttendees(false);
+    }
+  };
   
   if (isLoading && isStatsLoading) {
     return (
@@ -88,6 +107,10 @@ const AdminDashboard = () => {
       </div>
     );
   }
+  
+  // Filter upcoming events
+  const upcomingEvents = events.filter(event => new Date(event.date) >= new Date())
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
   return (
     <div>
@@ -145,11 +168,11 @@ const AdminDashboard = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h2 className="text-lg font-semibold">Upcoming Events</h2>
-              <span className="badge-primary">{events.length} Events</span>
+              <span className="badge-primary">{upcomingEvents.length} Events</span>
             </div>
             
             <div className="divide-y divide-gray-100">
-              {events.length === 0 ? (
+              {upcomingEvents.length === 0 ? (
                 <div className="p-8 text-center">
                   <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
                     <Calendar size={24} className="text-gray-400" />
@@ -165,7 +188,7 @@ const AdminDashboard = () => {
                   </button>
                 </div>
               ) : (
-                events.slice(0, 5).map(event => (
+                upcomingEvents.map(event => (
                   <div key={event.id} className="p-4 hover:bg-gray-50">
                     <div className="flex items-start space-x-4">
                       <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden">
@@ -187,6 +210,20 @@ const AdminDashboard = () => {
                         </div>
                         
                         <div className="mt-1 flex items-center">
+                          <Clock size={14} className="text-gray-500 mr-1" />
+                          <span className="text-sm text-gray-600">
+                            {format(new Date(event.date), 'h:mm a')}
+                          </span>
+                        </div>
+                        
+                        <div className="mt-1 flex items-center">
+                          <MapPin size={14} className="text-gray-500 mr-1" />
+                          <span className="text-sm text-gray-600">
+                            {event.location}
+                          </span>
+                        </div>
+                        
+                        <div className="mt-1 flex items-center">
                           <Users size={14} className="text-gray-500 mr-1" />
                           <span className="text-sm text-gray-600">
                             {event.registered} / {event.capacity} registered
@@ -195,29 +232,18 @@ const AdminDashboard = () => {
                       </div>
                       
                       <div className="flex-shrink-0">
-                        <a 
-                          href={`/admin/events/${event.id}`}
+                        <button 
+                          onClick={() => handleViewAttendees(event.id)}
                           className="btn-secondary py-1 px-3 text-sm"
                         >
-                          View
-                        </a>
+                          View Attendees
+                        </button>
                       </div>
                     </div>
                   </div>
                 ))
               )}
             </div>
-            
-            {events.length > 5 && (
-              <div className="p-4 border-t border-gray-100 text-center">
-                <a 
-                  href="/admin/events"
-                  className="text-sm font-medium text-primary-600 hover:text-primary-500"
-                >
-                  View all events
-                </a>
-              </div>
-            )}
           </div>
         </div>
         
@@ -261,6 +287,28 @@ const AdminDashboard = () => {
         </div>
       </div>
       
+      {/* Selected Event Attendees */}
+      {selectedEvent && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Event Attendees</h2>
+            <button 
+              onClick={() => setSelectedEvent(null)}
+              className="text-sm text-gray-600 hover:text-gray-900"
+            >
+              Close
+            </button>
+          </div>
+          
+          <AttendeesList
+            eventId={selectedEvent}
+            eventTitle={events.find(e => e.id === selectedEvent)?.title || ''}
+            attendees={attendees}
+            isLoading={isLoadingAttendees}
+          />
+        </div>
+      )}
+      
       {/* Event Form Modal */}
       {showEventForm && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -283,24 +331,5 @@ const AdminDashboard = () => {
     </div>
   );
 };
-
-// Clock icon component
-const Clock = ({ size, className }: { size: number, className?: string }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-  >
-    <circle cx="12" cy="12" r="10"></circle>
-    <polyline points="12 6 12 12 16 14"></polyline>
-  </svg>
-);
 
 export default AdminDashboard;
